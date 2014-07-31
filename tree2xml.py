@@ -46,6 +46,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
     elems = []
     while stack:
         parent_elem, current_node, allow_empty = stack.pop(0)
+        #print "current node", current_node.name, current_node.value
         if isinstance(current_node, DiffNodeList):
             #if current_node.common_objects:
             #    parent_elem.appendChild(doc.createComment(" - COMMON - "))
@@ -76,6 +77,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                 parent_elem.appendChild(ret)
 
         elif isinstance(current_node, DiffNode):
+            #print "current node", current_node.name, current_node.value, current_node.diff_value
             if current_node._type != "attr":
                 current_elem = doc.createElement(current_node.name)
                 elems.append(current_elem)
@@ -106,9 +108,12 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                     current_elem.appendChild(doc.createComment(
                         " - MISSING IN 2 - "))
                     i += 1
+                #print "missing in 2", current_node.missing_in_2
                 for subnode in current_node.missing_in_2.itervalues():
+                    #print "subnode", subnode.name
                     #print "missing in 2", subnode.name
-                    if subnode._type == "attr":
+                    if not (isinstance(subnode, DiffNodeList) and
+                            subnode._type == "attr"):
                         subnode.name = "__missing_in_2__%s" % subnode.name
                     ret = tree2xml(subnode, _parent_elem=current_elem, doc=doc)
                     i += 1

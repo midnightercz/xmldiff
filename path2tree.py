@@ -170,7 +170,6 @@ class NodeList(Node):
         self.objects.append(Node(name))
 
     def diff(self, other, path="", ids={}):
-        print self.name
         current_path = "%s.%s" % (path, self.name)
         ret = DiffNodeList(self.name)
         objects1 = set()
@@ -181,7 +180,6 @@ class NodeList(Node):
                                         (o1_by_id, o2_by_id),
                                         (self, other)):
             for o in source.objects:
-                print current_path
                 if current_path in ids:
                     _id_parts = []
                     for id_part in ids[current_path]:
@@ -190,14 +188,12 @@ class NodeList(Node):
                         else:
                             _id_parts.append("")
                     _id = "".join(_id_parts)
-                    print _id
                     id_map[_id] = o
                     dest.add(_id)
                 else:
                     dest.add(o)
 
         common_o = objects1 & objects2
-        print common_o
         missing_in_1 = objects2 - common_o
         missing_in_2 = objects1 - common_o
 

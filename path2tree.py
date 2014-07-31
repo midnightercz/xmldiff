@@ -4,7 +4,17 @@ import sys
 import xml.dom.minidom
 
 
+class PathNotFound(Exception):
+    def __init__(self, path):
+        self.path = path
+
+    def __str__(self):
+        return "Path '%s' not found" % self.path
+
+
 class Node(object):
+    """ Basic object encapsulating path node"""
+
     def __init__(self, name, value=None, _type=None):
         self.objects = {}
         self.name = name
@@ -23,9 +33,9 @@ class Node(object):
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.value) ^ hash(self.diff_val) ^\
-               hash(self._type) ^\
-               hash(frozenset(self.objects.items())) ^\
-               hash(frozenset(self.diff_objects.items()))
+            hash(self._type) ^\
+            hash(frozenset(self.objects.items())) ^\
+            hash(frozenset(self.diff_objects.items()))
 
     def __eq__(self, other):
         return (self.name == other.name
@@ -36,10 +46,21 @@ class Node(object):
                 and self.diff_objects == other.diff_objects)
 
     def get(self, path):
+        """ method for get objects occuring in specified path.
+        if object has value, method returns value of object. Otherwise
+        returning whole object. If Node contains some list of subnodes
+        somewhere in path, index of concrete item is required in path
+        """
+
         current_object = self
         splitted = path.split(".")
-        for part in splitted[:-1]:
-            current_object = current_object._get(part, final=False)
+        try:
+            part_path = []
+            for part in splitted[:-1]:
+                current_object = current_object._get(part, final=False)
+                part_path.append(part)
+        except KeyError:
+            raise PathNotFound(".".join(part_path))
         return current_object._get(splitted[-1], final=True)
 
     def _get(self, part, final):
@@ -50,6 +71,11 @@ class Node(object):
             return self.objects[part]
 
     def get_last(self, path):
+        """ method simillar to .get, but path doesn't need to contain
+        index of item in list in path - last items in lists is accessed
+        automaticaly
+        """
+
         current_object = self
         splitted = path.split(".")
         for part in splitted[:-1]:
@@ -61,6 +87,14 @@ class Node(object):
     _get_last = _get
 
     def set(self, path, value=None, _type=None):
+        """ method for set object to path. Method doesn't work recursively -
+        all parts of path have to exit before inserting last - new one part.
+        For example you have to call set("some") before you cal
+        set("some.foo"). If value is specified, will be assigned to last
+        object in path. Method works same way as get - if list of items
+        occurs somewhere in path, you need to specify index for concrete item
+        """
+
         splitted = path.split(".")
         current_object = self
         for part in splitted[:-1]:
@@ -79,6 +113,9 @@ class Node(object):
                 current_object.objects[splitted[-1]].set(splitted[-1])
 
     def fill(self, path, value=None, _type=None):
+        """ same as set, but automaticaly traverse path over last items
+        in lists"""
+
         splitted = path.split(".")
         current_object = self
         for part in splitted[:-1]:
@@ -103,6 +140,8 @@ class Node(object):
                     old = current_object.objects[splitted[-1]]._type = _type
 
     def diff(self, other, path="", ids={}):
+        """Computes deep difference between two nodes"""
+
         current_path = "%s.%s" % (path, self.name)
         keys1 = set(self.objects.keys())
         keys2 = set(other.objects.keys())
@@ -176,11 +215,14 @@ class NodeList(Node):
         objects2 = set()
         o1_by_id = {}
         o2_by_id = {}
+        use_ids = False
+        if current_path in ids:
+            use_ids = True
         for dest, id_map, source in zip((objects1, objects2),
-                                        (o1_by_id, o2_by_id),
-                                        (self, other)):
+                                        (o1_by_id, o2_by_id), (self, other)):
             for o in source.objects:
-                if current_path in ids:
+                if use_ids:
+                    # id compute
                     _id_parts = []
                     for id_part in ids[current_path]:
                         if id_part in o.objects:
@@ -189,8 +231,10 @@ class NodeList(Node):
                             _id_parts.append("")
                     _id = "".join(_id_parts)
                     id_map[_id] = o
+                    # add id
                     dest.add(_id)
                 else:
+                    # add whole object
                     dest.add(o)
 
         common_o = objects1 & objects2
@@ -198,19 +242,21 @@ class NodeList(Node):
         missing_in_2 = objects1 - common_o
 
         for o in common_o:
-            if current_path in ids:
+            # if id is used, calculate diff, because two objects with same
+            # id don't have to be same in general
+            if use_ids:
                 ret.common_objects.append(o1_by_id[o].diff(o2_by_id[o],
                                                            path=current_path,
                                                            ids=ids))
             else:
                 pass
         for o1 in missing_in_2:
-            if current_path in ids:
+            if use_ids:
                 ret.missing_in_2.append(o1_by_id[o1])
             else:
                 ret.missing_in_2.append(o1)
         for o2 in missing_in_1:
-            if current_path in ids:
+            if use_ids:
                 ret.missing_in_1.append(o2_by_id[o2])
             else:
                 ret.missing_in_1.append(o2)

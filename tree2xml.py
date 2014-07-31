@@ -28,9 +28,9 @@ def tree2xml(root_node, doc=None, _parent_elem=None):
 
                 for subnode in current_node.objects.itervalues():
                     stack.insert(0, (current_elem, subnode))
-
-            else:
+            else:  # attribute, not value node
                 parent_elem.setAttribute(current_node.name, current_node.value)
+
     if not return_list and not _parent_elem:
         return elems[0]
     else:
@@ -46,10 +46,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
     elems = []
     while stack:
         parent_elem, current_node, allow_empty = stack.pop(0)
-        #print "current node", current_node.name, current_node.value
         if isinstance(current_node, DiffNodeList):
-            #if current_node.common_objects:
-            #    parent_elem.appendChild(doc.createComment(" - COMMON - "))
             for obj in current_node.common_objects:
                 ret = diff_tree2xml(obj,
                                     doc=doc,

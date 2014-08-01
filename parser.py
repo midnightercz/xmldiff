@@ -49,6 +49,26 @@ class XMLProperty(object):
     def __ne__(self, other):
         return self.load().strip() != other.load().strip()
 
+    def __len__(self):
+        return self._len
+
+    def __repr__(self):
+        self.source.seek(self.offset)
+        ret = self.source.read(self._len).strip()
+        return ret
+
+    def __getitem__(self, _len):
+        start = _len.start if _len.start else 0
+        stop = _len.stop if _len.stop else 0
+        self.source.seek(self.offset+start)
+        ret = self.source.read(stop).strip()
+        return ret
+
+    def __hash__(self):
+        print "__hash__"
+        self.source.seek(self.offset)
+        ret = self.source.read(self._len).strip()
+        return hash(ret)
 
 class Parser(object):
     def __init__(self):
@@ -61,23 +81,29 @@ class Parser(object):
         self.path = ""
         self.cdata = None
         self.tree = path2tree.Node(u"root")
+        self.elem_names = []
 
     def start_el_handler(self, name, attrs):
-        self.el_stack.append({"name": name, "attrs": attrs})
-        self.path = ".".join([el["name"] for el in self.el_stack])
-        self.tree.fill(self.path)
+        if not name in self.elem_names:
+            self.elem_names.append(name)
+        else:
+            name = self.elem_names[self.elem_names.index(name)]
+
+        self.path = ".".join([el["name"] for el in self.el_stack] + [name])
+        added = self.tree.fill(self.path)
+        self.el_stack.append({"name": name, "attrs": attrs, "node": added})
         for key, val in attrs.iteritems():
             self.tree.fill("%s.%s" % (self.path, key), value=val, _type=u"attr")
         self.cdata = None
-        #self.cdata_xml = XMLProperty(self.source, self.parser.CurrentByteIndex,
-        #                             0)
 
     def end_el_handler(self, name):
+        stack_item = self.el_stack.pop()
+        node = stack_item["node"]
         if self.cdata is not None and self.cdata.strip():
             self.cdata_xml._len = self.parser.CurrentByteIndex - self.cdata_xml.offset
-            #self.tree.fill(self.path, value=self.cdata.strip(), _type="content")
-            self.tree.fill(self.path, value=self.cdata_xml, _type=u"content")
-        self.el_stack.pop()
+            node.value = self.cdata_xml
+            node._type = "content"
+
         self.path = ".".join([el["name"] for el in self.el_stack])
         self.cdata = None
 

@@ -1,7 +1,7 @@
 import pprint
 import sys
 
-import xml.dom.minidom
+#import xml.dom.minidom
 
 
 class PathNotFound(Exception):
@@ -19,10 +19,7 @@ class Node(object):
         self.objects = {}
         self.name = name
         self.value = value
-        self.diff_val = None
         self._type = _type
-        self.diff_type = None
-        self.diff_objects = {}
 
     def __repr__(self):
         if self.value and len(self.value) > 20:
@@ -32,12 +29,13 @@ class Node(object):
         return "(%s value=%s, %s)" % (self.name, value, repr(self.objects))
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.value) ^ hash(self.diff_val) ^\
+        return hash(self.name) ^ hash(self.value) ^\
             hash(self._type) ^\
-            hash(frozenset(self.objects.items())) ^\
-            hash(frozenset(self.diff_objects.items()))
+            hash(frozenset(self.objects.items()))
 
-    def __eq__(self, other):
+    def __richcmp__(self, other, op):
+        if op != 2:
+            raise NotImplemented
         return (self.name == other.name
                 and self.value == other.value
                 and self.diff_val == other.diff_val
@@ -84,7 +82,13 @@ class Node(object):
             current_object = current_object._get(part, final=False)
         return current_object._get_last(splitted[-1], final=True)
 
-    _get_last = _get
+    #_get_last = _get
+    def _get_last(self, part, final):
+        if (final and hasattr(self.objects[part], "value")
+           and self.objects[part].value):
+            return self.objects[part].value
+        else:
+            return self.objects[part]
 
     def set(self, path, value=None, _type=None):
         """ method for set object to path. Method doesn't work recursively -
@@ -170,11 +174,14 @@ class Node(object):
             ret.common_objects[ckey] = item
 
         if self.value is not None:
+            #print self.value
+            #print other.value
             if self.value != other.value or self._type != other._type:
-                ret.value = self.value
-                ret.diff_value = other.value
-                ret._type = other._type
-                ret.diff_value = other.value
+                ret.value_diff = True
+                #ret.value = self.value
+                #ret.diff_value = other.value
+                #ret._type = other._type
+                #ret.diff_value = other.value
         for mkey2 in missing_in_1:
             ret.missing_in_1[mkey2] = other.objects[mkey2]
         for mkey1 in missing_in_2:
@@ -182,16 +189,18 @@ class Node(object):
         return ret
 
 
-class NodeList(Node):
+class NodeList(object):
+
     def __init__(self, name):
         self.objects = []
-        self.diff_objects = []
         self.name = name
 
     def __repr__(self):
         return "(%s, %s)" % (self.name, repr(self.objects))
 
-    def __eq__(self, other):
+    def __richcmp__(self, other, op):
+        if op != 2:
+            raise NotImplemented
         return (self.name == other.name
                 and set(self.objects) == set(other.objects)
                 and set(self.diff_objects) == set(other.diff_objects))
@@ -226,7 +235,11 @@ class NodeList(Node):
                     _id_parts = []
                     for id_part in ids[current_path]:
                         if id_part in o.objects:
-                            _id_parts.append(o.get(id_part))
+                            val = o.get(id_part)
+                            if isinstance(val, unicode):
+                                _id_parts.append(val)
+                            else:
+                                _id_parts.append(val.load())
                         else:
                             _id_parts.append("")
                     _id = "".join(_id_parts)
@@ -238,6 +251,7 @@ class NodeList(Node):
                     dest.add(o)
 
         common_o = objects1 & objects2
+        #print common_o
         missing_in_1 = objects2 - common_o
         missing_in_2 = objects1 - common_o
 
@@ -248,8 +262,6 @@ class NodeList(Node):
                 ret.common_objects.append(o1_by_id[o].diff(o2_by_id[o],
                                                            path=current_path,
                                                            ids=ids))
-            else:
-                pass
         for o1 in missing_in_2:
             if use_ids:
                 ret.missing_in_2.append(o1_by_id[o1])
@@ -264,26 +276,25 @@ class NodeList(Node):
 
 
 class DiffNode(object):
+    __slots__ = ["name", "common_objects", "missing_in_1", "missing_in_2",
+                 "original_1", "original_2", "value_diff"]
+
     def __init__(self, name):
         self.name = name
         self.common_objects = {}
         self.missing_in_1 = {}
         self.missing_in_2 = {}
-        self.value = None
-        self.diff_value = None
-        self._type = None
-        self.diff_type = None
         self.original_1 = None
         self.original_2 = None
+        self.value_diff = False
 
 
 class DiffNodeList(object):
+    __slots__ = ["name", "common_objects", "missing_in_1", "missing_in_2",
+                 "original_1", "original_2", "value_diff"]
+
     def __init__(self, name):
         self.name = name
         self.common_objects = []
         self.missing_in_1 = []
         self.missing_in_2 = []
-        self.value = None
-        self.diff_value = None
-        self._type = None
-        self.diff_type = None

@@ -1,4 +1,5 @@
 import xml.dom.minidom
+#import pyximport; pyximport.install()
 
 from path2tree import Node, NodeList, DiffNode, DiffNodeList
 
@@ -23,13 +24,14 @@ def tree2xml(root_node, doc=None, _parent_elem=None):
                 if parent_elem:
                     parent_elem.appendChild(current_elem)
                 if current_node.value:
-                    cnode = doc.createTextNode(current_node.value)
+                    cnode = doc.createTextNode(current_node.value.load())
                     current_elem.appendChild(cnode)
 
                 for subnode in current_node.objects.itervalues():
                     stack.insert(0, (current_elem, subnode))
             else:  # attribute, not value node
-                parent_elem.setAttribute(current_node.name, current_node.value)
+                parent_elem.setAttribute(current_node.name,
+                                         current_node.value)
 
     if not return_list and not _parent_elem:
         return elems[0]
@@ -75,7 +77,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
 
         elif isinstance(current_node, DiffNode):
             #print "current node", current_node.name, current_node.value, current_node.diff_value
-            if current_node._type != "attr":
+            if current_node.original_1._type != "attr":
                 current_elem = doc.createElement(current_node.name)
                 elems.append(current_elem)
 
@@ -110,7 +112,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                     #print "subnode", subnode.name
                     #print "missing in 2", subnode.name
                     if not (isinstance(subnode, DiffNodeList) and
-                            subnode._type == "attr"):
+                            subnode.original_1._type == "attr"):
                         subnode.name = "__missing_in_2__%s" % subnode.name
                     ret = tree2xml(subnode, _parent_elem=current_elem, doc=doc)
                     i += 1
@@ -132,14 +134,15 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                             current_elem.insertBefore(ret[0], first_child)
                         else:
                             current_elem.appendChild(ret[0])
-                if current_node.diff_value:
+                # diff value
+                if current_node.value_diff:
                     current_elem.appendChild(doc.createComment(
                         " - MISSING IN 1 - "))
-                    cnode = doc.createTextNode(current_node.value)
+                    cnode = doc.createTextNode(current_node.original_1.value.load())
                     current_elem.appendChild(cnode)
                     current_elem.appendChild(doc.createComment(
                         " - MISSING IN 2 - "))
-                    cnode = doc.createTextNode(current_node.diff_value)
+                    cnode = doc.createTextNode(current_node.original_2.value.load())
                     current_elem.appendChild(cnode)
                 if parent_elem:
                     if (isinstance(current_elem, xml.dom.minidom.Comment)
@@ -147,10 +150,20 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                        or current_elem.hasChildNodes()
                        or allow_empty):
                         parent_elem.appendChild(current_elem)
-            else:
-                parent_elem.setAttribute(current_node.name, current_node.value)
+            else: # attribute
+                if not current_node.value_diff:
+                    continue
+                orig_val = current_node.original_1.value
+                diff_val = current_node.original_2.value
+                if not isinstance(orig_val, unicode):
+                    orig_val = orig_val.load()
+                if not isinstance(diff_val, unicode):
+                    diff_val = diff_val.load()
+                parent_elem.setAttribute(current_node.name, orig_val)
+                #                         current_node.original_1.value.load())
                 parent_elem.setAttribute("__diff__%s" % current_node.name,
-                                         current_node.diff_value)
+                                         diff_val)
+                #                         current_node.original_2.value.load())
 
     if not return_list:
         if elems:

@@ -1,8 +1,7 @@
+import parser
+import collections
+import StringIO
 import pprint
-import sys
-
-#import xml.dom.minidom
-
 
 class PathNotFound(Exception):
     def __init__(self, path):
@@ -27,7 +26,7 @@ class StrCache(object):
 class Node(object):
     """ Basic object encapsulating path node"""
 
-    __slots__ = ["objects", "name", "value", "_type", "str_cache"]
+    __slots__ = ["objects", "name", "value", "_type", "str_cache", "_hash"]
 
     def __init__(self, name, value=None, _type=None, str_cache=StrCache()):
         self.objects = {}
@@ -35,6 +34,7 @@ class Node(object):
         self.value = value
         self._type = _type
         self.str_cache = str_cache
+        self._hash = None
 
     def __repr__(self):
         if self.value and len(self.value) > 20:
@@ -44,25 +44,14 @@ class Node(object):
         return "(%s value=%s, %s)" % (self.name, value, repr(self.objects))
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.value) ^\
-            hash(self._type) ^\
-            hash(frozenset(self.objects.items()))
+        if not self._hash:
+            self._hash = (hash(self.name) ^ hash(self.value) ^
+                          hash(self._type) ^
+                          hash(frozenset(self.objects.items())))
+        return self._hash
 
     def __eq__(self, other):
-        return (self.name == other.name
-                and self.value == self.value
-                and self._type == self._type
-                and set(self.objects) == set(other.objects))
-
-    def __richcmp__(self, other, op):
-        if op != 2:
-            raise NotImplemented
-        return (self.name == other.name
-                and self.value == other.value
-                and self.diff_val == other.diff_val
-                and self._type == other._type
-                and self.objects == other.objects
-                and self.diff_objects == other.diff_objects)
+        return hash(self) == hash(other)
 
     def get(self, path):
         """ method for get objects occuring in specified path.
@@ -89,21 +78,20 @@ class Node(object):
         else:
             return self.objects[part]
 
-    def get_last(self, path):
-        """ method simillar to .get, but path doesn't need to contain
-        index of item in list in path - last items in lists is accessed
-        automaticaly
-        """
+    #def get_last(self, path):
+    #    """ method simillar to .get, but path doesn't need to contain
+    #    index of item in list in path - last items in lists is accessed
+    #    automaticaly
+    #    """
+    #
+    #    current_object = self
+    #    splitted = path.split(".")
+    #    for part in splitted[:-1]:
+    #        if isinstance(current_object, NodeList):
+    #            current_object = current_object._get_last()
+    #        current_object = current_object._get(part, final=False)
+    #    return current_object._get_last(splitted[-1], final=True)
 
-        current_object = self
-        splitted = path.split(".")
-        for part in splitted[:-1]:
-            if isinstance(current_object, NodeList):
-                current_object = current_object._get_last()
-            current_object = current_object._get(part, final=False)
-        return current_object._get_last(splitted[-1], final=True)
-
-    #_get_last = _get
     def _get_last(self, part, final):
         if (final and hasattr(self.objects[part], "value")
            and self.objects[part].value):
@@ -121,29 +109,30 @@ class Node(object):
         """
 
         splitted = path.split(".")
+        last_part = self.str_cache.get(splitted[-1])
         current_object = self
         for part in splitted[:-1]:
             current_object = current_object._get(part, final=False)
 
-        if splitted[-1] not in current_object.objects:
-            current_object.objects[splitted[-1]] = Node(splitted[-1],
-                                                        value, _type)
+        if last_part not in current_object.objects:
+            current_object.objects[last_part] = Node(last_part,
+                                                     value, _type,
+                                                     str_cache=self.str_cache)
         else:
-            if isinstance(current_object.objects[splitted[-1]], NodeList):
-                current_object.objects[splitted[-1]].set(splitted[-1])
+            if isinstance(current_object.objects[last_part], NodeList):
+                current_object.objects[last_part].set(last_part)
             else:
-                old = current_object.objects[splitted[-1]]
-                current_object.objects[splitted[-1]] = NodeList(splitted[-1])
-                current_object.objects[splitted[-1]].objects.append(old)
-                current_object.objects[splitted[-1]].set(splitted[-1])
+                old = current_object.objects[last_part]
+                current_object.objects[last_part] = NodeList(last_part)
+                current_object.objects[last_part].objects.append(old)
+                current_object.objects[last_part].set(last_part)
 
     def fill(self, path, value=None, _type=None):
         """ same as set, but automaticaly traverse path over last items
         in lists"""
         splitted = path.split(".")
         current_object = self
-        last_part = splitted[-1]
-        last_part = self.str_cache.get(last_part)
+        last_part = self.str_cache.get(splitted[-1])
 
         for part in splitted[:-1]:
             part = self.str_cache.get(part)
@@ -162,7 +151,9 @@ class Node(object):
             else:
                 if value is None:
                     old = current_object.objects[last_part]
-                    current_object.objects[last_part] = NodeList(last_part)
+                    current_object.objects[last_part] = NodeList(
+                        last_part,
+                        str_cache=self.str_cache)
                     current_object.objects[last_part].objects.append(old)
                     current_object.objects[last_part].set(last_part)
                     return current_object.objects[last_part]._get_last_index("")
@@ -171,23 +162,69 @@ class Node(object):
                     current_object.objects[last_part]._type = _type
                     return current_object.objects[last_part].value
 
+    def fill_light(self, path, _type, source, index, _len):
+        """ same as fill, but create LightNode instead Node"""
+        splitted = path.split(".")
+        current_object = self
+        if isinstance(current_object, LightNode):
+            return current_object
+
+        last_part = self.str_cache.get(splitted[-1])
+
+        for part in splitted[:-1]:
+            part = self.str_cache.get(part)
+            if isinstance(current_object, LightNode):
+                break
+            current_object = current_object._get_last(part, final=False)
+        if isinstance(current_object, LightNode):
+            return current_object
+
+        if isinstance(current_object, NodeList):
+            current_object = current_object._get_last_index(part)
+        if isinstance(current_object, LightNode):
+            return None
+
+        if last_part not in current_object.objects:
+            current_object.objects[last_part] = LightNode(
+                last_part, _type,
+                source, index, _len,
+                str_cache=self.str_cache)
+            return current_object.objects[last_part]
+        elif not isinstance(current_object, LightNode):
+            if isinstance(current_object.objects[last_part], NodeList):
+                current_object.objects[last_part].set_light(
+                    last_part, _type, source, index, _len, self.str_cache)
+                return current_object.objects[last_part]._get_last_index("")
+            else:
+                old = current_object.objects[last_part]
+                current_object.objects[last_part] = NodeList(
+                    last_part,
+                    str_cache=self.str_cache)
+                current_object.objects[last_part].objects.append(old)
+                current_object.objects[last_part].objects.append(
+                    LightNode(last_part, _type, source, index, _len))
+                return current_object.objects[last_part]._get_last_index("")
+
     def diff(self, other, path="", ids={}):
-        """Computes deep difference between two nodes"""
+        """Computes deep differences between two nodes"""
 
         current_path = "%s.%s" % (path, self.name)
-        keys1 = set(self.objects.keys())
-        keys2 = set(other.objects.keys())
+        #print "node path", current_path
+        self_objects = self.objects
+        other_objects = other.objects
+
+        keys1 = set(self_objects.keys())
+        keys2 = set(other_objects.keys())
         common = keys1 & keys2
         missing_in_2 = keys1 - common
         missing_in_1 = keys2 - common
+        del keys1, keys2
 
         ret = DiffNode(self.name)
-        ret.original_1 = self
-        ret.original_2 = other
 
         for ckey in common:
-            item1 = self.objects[ckey]
-            item2 = other.objects[ckey]
+            item1 = self_objects[ckey]
+            item2 = other_objects[ckey]
 
             if isinstance(item1, NodeList) and not isinstance(item2, NodeList):
                 new_list = NodeList(item2.name)
@@ -198,40 +235,41 @@ class Node(object):
                 new_list.objects.append(item1)
                 item1 = new_list
 
-            item = item1.diff(item2, path=current_path, ids=ids)
-            ret.common_objects[ckey] = item
+            items_diff = item1.diff(item2, path=current_path, ids=ids)
+            ret.common_objects[ckey] = items_diff
+
+        ret._type = self._type
+        ret.value = self.value
 
         if self.value is not None:
             if self.value != other.value or self._type != other._type:
-                ret.value_diff = True
+                ret.diff_value = other.value
+                ret.diff_type = other._type
+                ret.differ = True
+
         for mkey2 in missing_in_1:
-            ret.missing_in_1[mkey2] = other.objects[mkey2]
+            ret.missing_in_1[mkey2] = other_objects[mkey2]
         for mkey1 in missing_in_2:
-            ret.missing_in_2[mkey1] = self.objects[mkey1]
+            ret.missing_in_2[mkey1] = self_objects[mkey1]
+        if missing_in_1 or missing_in_2:
+            ret.differ = True
         return ret
 
 
 class NodeList(object):
-    __slots__ = ["objects", "name", "value", "_type", "str_cache"]
+    __slots__ = ["objects", "name", "_type", "str_cache", "_hash"]
 
     def __init__(self, name, str_cache=StrCache()):
-        self.objects = []
-        self.name = name
+        self.objects = collections.deque()
+        self.name = str_cache.get(name)
         self.str_cache = str_cache
+        self._hash = None
 
     def __repr__(self):
         return "(%s, %s)" % (self.name, repr(self.objects))
 
     def __eq__(self, other):
-        return (self.name == other.name
-                and set(self.objects) == set(other.objects))
-
-    def __richcmp__(self, other, op):
-        if op != 2:
-            raise NotImplemented
-        return (self.name == other.name
-                and set(self.objects) == set(other.objects)
-                and set(self.diff_objects) == set(other.diff_objects))
+        return hash(self) == hash(other)
 
     def _get_last(self, part, final=False):
         return self.objects[-1].objects[part]
@@ -243,10 +281,16 @@ class NodeList(object):
         return self.objects[int(part)]
 
     def set(self, name):
-        self.objects.append(Node(name))
+        self.objects.append(Node(name, str_cache=self.str_cache))
+
+    def set_light(self, name, _type, source, index, _len, str_cache):
+            self.objects.append(LightNode(name, _type, source, index, _len,
+                                          str_cache=self.str_cache))
 
     def diff(self, other, path="", ids={}):
         current_path = "%s.%s" % (path, self.name)
+        #current_path = path
+        #print "List path", current_path
         ret = DiffNodeList(self.name)
         objects1 = set()
         objects2 = set()
@@ -255,47 +299,54 @@ class NodeList(object):
         use_ids = False
         if current_path in ids:
             use_ids = True
-        for dest, id_map, source in zip((objects1, objects2),
-                                        (o1_by_id, o2_by_id), (self, other)):
-            for o in source.objects:
+        self_objects = self.objects
+        other_objects = other.objects
+        for dest, id_map, objects in zip((objects1, objects2),
+                                         (o1_by_id, o2_by_id),
+                                         (self_objects, other_objects)):
+            for o in objects:
                 if use_ids:
                     # id compute
                     _id_parts = []
                     for id_part in ids[current_path]:
+                        #print id_part
                         if id_part in o.objects:
                             val = o.get(id_part)
                             if isinstance(val, unicode):
                                 _id_parts.append(val)
+                            elif isinstance(val, LightNode):
+                                if isinstance(val.value, unicode):
+                                    _id_parts.append(val.value.load())
+                                else:
+                                    _id_parts.append(val.value)
                             else:
                                 _id_parts.append(val.load())
                         else:
                             _id_parts.append("")
-                    _id = "".join(_id_parts)
+                    _id = "".join([x for x in _id_parts if x])
                     id_map[_id] = o
                     # add id
                     dest.add(_id)
                 else:
                     # add whole object
-                    print hash(o)
                     dest.add(o)
 
         common_o = objects1 & objects2
-        print "COMMON"
-        print common_o
         missing_in_1 = objects2 - common_o
-        print "MISSING IN 1"
-        print missing_in_1
         missing_in_2 = objects1 - common_o
-        print "MISSING IN 2"
-        print missing_in_2
-    
+
+
         for o in common_o:
             # if id is used, calculate diff, because two objects with same
             # id don't have to be same in general
             if use_ids:
-                ret.common_objects.append(o1_by_id[o].diff(o2_by_id[o],
-                                                           path=current_path,
-                                                           ids=ids))
+                common_current_path = ".".join(current_path.split(".")[:-1])
+                diff_obj = o1_by_id[o].diff(o2_by_id[o],
+                                            path=common_current_path,
+                                            ids=ids)
+                if not diff_obj.is_empty():
+                    ret.common_objects.append(diff_obj)
+
         for o1 in missing_in_2:
             if use_ids:
                 ret.missing_in_2.append(o1_by_id[o1])
@@ -306,29 +357,95 @@ class NodeList(object):
                 ret.missing_in_1.append(o2_by_id[o2])
             else:
                 ret.missing_in_1.append(o2)
+        if not ret.differ:
+            for obj in ret.common_objects:
+                if not obj.is_empty():
+                    ret.differ = True
+                    break
         return ret
 
 
 class DiffNode(object):
     __slots__ = ["name", "common_objects", "missing_in_1", "missing_in_2",
-                 "original_1", "original_2", "value_diff"]
+                 "value", "diff_value", "_type",
+                 "diff_type", "differ"]
 
     def __init__(self, name):
         self.name = name
         self.common_objects = {}
         self.missing_in_1 = {}
         self.missing_in_2 = {}
-        self.original_1 = None
-        self.original_2 = None
-        self.value_diff = False
+        self.value = None
+        self.diff_value = None
+        self._type = None
+        self.diff_type = None
+        self.differ = False
+
+    def is_empty(self):
+        if self.differ:
+            return False
+        for item in self.common_objects.itervalues():
+            if not item.is_empty():
+                return False
+        if self.missing_in_1 or self.missing_in_2:
+            return False
+        return True
 
 
 class DiffNodeList(object):
     __slots__ = ["name", "common_objects", "missing_in_1", "missing_in_2",
-                 "original_1", "original_2", "value_diff"]
+                 "value", "diff_value", "_type",
+                 "diff_type", "differ"]
 
     def __init__(self, name):
         self.name = name
-        self.common_objects = []
-        self.missing_in_1 = []
-        self.missing_in_2 = []
+        self.common_objects = collections.deque()
+        self.missing_in_1 = collections.deque()
+        self.missing_in_2 = collections.deque()
+        self.differ = False
+
+    def is_empty(self):
+        if self.differ:
+            return False
+        for item in self.common_objects:
+            if not item.is_empty:
+                return False
+        if self.missing_in_1 or self.missing_in_2:
+            return False
+        return True
+
+
+class LightNode(Node):
+    __slots__ = ["_type", "name", "source", "offset", "_len", "str_cache",
+                 "_hash"]
+
+    def __init__(self, name, _type,
+                 source, offset, _len, str_cache=StrCache()):
+        self._type = _type
+        self.name = str_cache.get(name)
+        self.source = source
+        self.offset = offset
+        self._len = _len
+        self.str_cache = str_cache
+        self._hash = None
+
+    @property
+    def objects(self):
+        p = parser.Parser()
+        oldpos = self.source.tell()
+        self.source.seek(self.offset)
+        _str = self.source.read(self._len)
+        self.source.seek(oldpos)
+        ret = p.parse_str(_str)
+        return ret.objects[self.name].objects
+
+    @property
+    def value(self):
+        p = parser.Parser()
+
+        oldpos = self.source.tell()
+        self.source.seek(self.offset)
+        _str = self.source.read(self._len)
+        self.source.seek(oldpos)
+        ret = p.parse_str(_str)
+        return ret.objects[self.name].value

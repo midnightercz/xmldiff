@@ -14,9 +14,10 @@ def tree2xml(root_node, doc=None, _parent_elem=None):
         parent_elem, current_node = stack.pop(0)
         if isinstance(current_node, NodeList):
             i = 0
-            for obj in current_node.objects:
-                stack.insert(i, (parent_elem, obj))
-                i += 1
+            if hasattr(current_node, "objects"):
+                for obj in current_node.objects:
+                    stack.insert(i, (parent_elem, obj))
+                    i += 1
         else:
             if current_node._type != "attr":  # value node, not attribute
                 current_elem = doc.createElement(current_node.name)
@@ -27,9 +28,11 @@ def tree2xml(root_node, doc=None, _parent_elem=None):
                     cnode = doc.createTextNode(current_node.value.load())
                     current_elem.appendChild(cnode)
 
-                for subnode in current_node.objects.itervalues():
-                    stack.insert(0, (current_elem, subnode))
+                if hasattr(current_node, "objects"):
+                    for subnode in current_node.objects.itervalues():
+                        stack.insert(0, (current_elem, subnode))
             else:  # attribute, not value node
+                #print current_node.name, current_node.value, "ATTR"
                 parent_elem.setAttribute(current_node.name,
                                          current_node.value)
 
@@ -76,7 +79,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                 parent_elem.appendChild(ret)
 
         elif isinstance(current_node, DiffNode):
-            if current_node.original_1._type != "attr":
+            if current_node._type != "attr":
                 current_elem = doc.createElement(current_node.name)
                 elems.append(current_elem)
 
@@ -109,6 +112,7 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                     if (not isinstance(subnode, DiffNodeList)
                        and subnode._type == "attr"):
                         subnode.name = "__missing_x_in_2__%s" % subnode.name
+                    #print "missing in 2", subnode
                     ret = tree2xml(subnode, _parent_elem=current_elem, doc=doc)
                     i += 1
 
@@ -119,26 +123,28 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                         if subnode_name not in current_node.common_objects:
                             continue
                         subnode = current_node.common_objects[subnode_name]
-                        ret = tree2xml(subnode.original_1,
-                                       _parent_elem=current_elem,
+                        ret = tree2xml(subnode, _parent_elem=current_elem,
                                        doc=doc)
                         if not ret:
                             continue
+                        if isinstance(ret, list):
+                            ret = ret[0]
                         first_child = current_elem.firstChild
                         if first_child:
-                            current_elem.insertBefore(ret[0], first_child)
+                            current_elem.insertBefore(ret, first_child)
                         else:
-                            current_elem.appendChild(ret[0])
+                            current_elem.appendChild(ret)
                 # diff value
-                if current_node.value_diff:
+                if current_node.differ and (current_node.value or current_node.diff_value):
                     current_elem.appendChild(doc.createComment(
                         " - MISSING IN 1 - "))
-                    cnode = doc.createTextNode(current_node.original_1.value.load())
+                    cnode = doc.createTextNode(current_node.value.load())
                     current_elem.appendChild(cnode)
                     current_elem.appendChild(doc.createComment(
                         " - MISSING IN 2 - "))
-                    cnode = doc.createTextNode(current_node.original_2.value.load())
-                    current_elem.appendChild(cnode)
+                    if current_node.diff_value:
+                        cnode = doc.createTextNode(current_node.diff_value.load())
+                        current_elem.appendChild(cnode)
                 if parent_elem:
                     if (isinstance(current_elem, xml.dom.minidom.Comment)
                        or current_elem.hasAttributes()
@@ -146,10 +152,10 @@ def diff_tree2xml(root_node, doc=None, root_parent=None, allow_empty=False,
                        or allow_empty):
                         parent_elem.appendChild(current_elem)
             else: # attribute
-                if not current_node.value_diff:
+                if not current_node.differ:
                     continue
-                orig_val = current_node.original_1.value
-                diff_val = current_node.original_2.value
+                orig_val = current_node.value
+                diff_val = current_node.diff_value
                 if not isinstance(orig_val, unicode):
                     orig_val = orig_val.load()
                 if not isinstance(diff_val, unicode):

@@ -44,7 +44,7 @@ IDS = {".root.comps.group.group": ["id"],
        ".root.comps.environment": ["id"],
        ".root.comps.environment.environment": ["id"]}
 
-# This thing make output more human friendly. Because xml output is containing
+# This thing makes output more human friendly. Because xml output is containing
 # only elements and attributes which are different. But of course you want
 # to know at least id of group that contains different sub-elements.
 # REQUIRED_ATTRS ensure you, that if specified objects are different at least
@@ -56,7 +56,7 @@ REQUIRED_ATTRS = {"group": ["id"],
                   "environment": ["id"]}
 
 
-# makes diff thing. Path parameter is needed because diff method is called
+# Now do a diff thing. Path parameter is needed because diff method is called
 # recursively. So we start with empty path
 
 diffed = parsed1.diff(parsed2, path="", ids=IDS, required=REQUIRED_ATTRS)

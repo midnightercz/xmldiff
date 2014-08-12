@@ -79,7 +79,7 @@ class XMLProperty(object):
 
 
 class Parser(object):
-    def __init__(self):
+    def __init__(self, nodes_limit=16000, depth_limit=3):
         self.parser = xml.parsers.expat.ParserCreate()
         self.parser.StartElementHandler = self.start_el_handler
         self.parser.EndElementHandler = self.end_el_handler
@@ -89,8 +89,8 @@ class Parser(object):
         self.cdata = False
         self.tree = path2tree.Node("root")
         self.light_ended = False
-        self.nodes_limit = 160000
-        self.depth_limit = 3
+        self.nodes_limit = nodes_limit
+        self.depth_limit = depth_limit
         self.nodes_counter = 0
 
     def start_el_handler(self, name, attrs):
@@ -182,7 +182,6 @@ class Parser(object):
             node._len = self.parser.CurrentByteIndex - node.offset
             self.path = ".".join([el["name"] for el in self.el_stack])
             self.light_ended = False
-
         return self.tree
 
     def parse_str(self, _str):
@@ -195,5 +194,4 @@ class Parser(object):
             node._len = self.parser.CurrentByteIndex - node.offset
             self.path = ".".join([el["name"] for el in self.el_stack])
             self.light_ended = False
-
         return self.tree

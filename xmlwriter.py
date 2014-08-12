@@ -1,8 +1,12 @@
 from xml.sax.saxutils import escape, quoteattr
-import sys
+# import sys
 
 
 class XMLWriter(object):
+    """ Simple XML writer similar to xml.sax.saxutils.XMLGenerator.
+    write xml output sequentialy (without building tree in memory)
+    to stream"""
+
     def __init__(self, stream, lvl_sep='    ', encoding="utf-8"):
         self.stream = stream
         self.indent_lvl = 0
@@ -49,7 +53,6 @@ class XMLWriter(object):
             self.indent_lvl -= 1
 
     def end_element(self):
-        #print >> sys.stderr, self.elem_stack
         if not self.no_content:
             if self.no_cdata:
                 self.stream.write(self.indent_sep * self.indent_lvl)

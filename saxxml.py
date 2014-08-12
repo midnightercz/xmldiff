@@ -1,9 +1,6 @@
-#from path2tree import LightNode
 from path2tree import NodeList
 from path2tree import DiffNode
 from path2tree import DiffNodeList
-#from xml.sax.saxutils import XMLGenerator
-#from xml.sax.xmlreader import AttributesNSImpl
 
 
 def tree2xml(xmlgenerator, root_node):
@@ -31,7 +28,8 @@ def tree2xml(xmlgenerator, root_node):
                             i += 1
                             no_content = False
                 no_content = node.value is None and no_content
-                xmlgenerator.start_element(node.name, attrs, no_content=no_content)
+                xmlgenerator.start_element(node.name, attrs,
+                                           no_content=no_content)
                 if node.value:
                     xmlgenerator.cdata(node.value.load())
                 stack.insert(i, (node, "end"))
@@ -46,7 +44,6 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
         if action == "start_diff":
             if isinstance(node, DiffNodeList):
                 i = 0
-                #print "list", node.name
                 empty_common = True
                 for obj in node.common_objects:
                     if not obj.is_empty():
@@ -58,8 +55,6 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                     for obj in node.common_objects:
                         stack.insert(i, (obj, "start_diff"))
                         i += 1
-                #print node.missing_in_1
-                #print node.missing_in_2
                 if node.missing_in_1:
                     stack.insert(i, ("MISSING IN 1", "start_xml"))
                     i += 1
@@ -72,15 +67,8 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                     for obj in node.missing_in_2:
                         stack.insert(i, (obj, "start_xml"))
                         i += 1
-                #for x in stack:
-                #    if isinstance(x[0], str):
-                #        print x[1], x[0]
-                #    else:
-                #        print x[1], x[0].name
-
 
             elif isinstance(node, DiffNode):
-                #print node.name
                 if node._type != "attr":
                     if node.is_empty():
                         continue
@@ -88,7 +76,6 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                     i = 0
                     no_content = True
                     for subnode in node.common_objects.itervalues():
-                        #print "subnode", subnode.name
                         _name = subnode.name
                         _dname = "__diff__%s" % subnode.name
                         if (not isinstance(subnode, DiffNodeList) and
@@ -98,7 +85,6 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                                 attrs[_dname] = subnode.diff_value
                             if (node.name in required_attrs and
                                subnode.name in required_attrs[node.name]):
-                                #print "required", _name,
                                 attrs[_name] = subnode.value
                                 attrs[_dname] = subnode.diff_value
                         else:
@@ -133,7 +119,6 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                             no_content = False
 
                     no_content = node.value is None and no_content
-                    #print node.name, no_content
                     xmlgenerator.start_element(node.name, attrs, no_content)
                     if node.differ:
                         if node.value:

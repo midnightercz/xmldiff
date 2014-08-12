@@ -1,7 +1,6 @@
 import parser
 import collections
-import StringIO
-import pprint
+
 
 class PathNotFound(Exception):
     def __init__(self, path):
@@ -78,6 +77,8 @@ class Node(object):
         else:
             return self.objects[part]
 
+    # This method is not required by Node to be full operational,
+    # but could be usefull
     #def get_last(self, path):
     #    """ method simillar to .get, but path doesn't need to contain
     #    index of item in list in path - last items in lists is accessed
@@ -102,11 +103,12 @@ class Node(object):
 
     def set(self, path, value=None, _type=None):
         """ method for set object to path. Method doesn't work recursively -
-        all parts of path have to exit before inserting last - new one part.
-        For example you have to call set("some") before you cal
+        all parts of path have to be inserted before
+        inserting last - new one part.
+        For example you have to call set("some") before you call
         set("some.foo"). If value is specified, will be assigned to last
         object in path. Method works same way as get - if list of items
-        occurs somewhere in path, you need to specify index for concrete item
+        occurs somewhere in path, you need to specify index of concrete item
         """
 
         splitted = path.split(".")
@@ -207,10 +209,11 @@ class Node(object):
                 return current_object.objects[last_part]._get_last_index("")
 
     def diff(self, other, path="", ids={}, required={}):
-        """Computes deep differences between two nodes"""
+        """Computes deep differences between two nodes. This operation
+        doesn't preserve content of self and other objects - unneeded objects
+        are deleted due memory save up"""
 
         current_path = "%s.%s" % (path, self.name)
-        #print "node path", current_path
         self_objects = self.objects
         other_objects = other.objects
 
@@ -227,20 +230,21 @@ class Node(object):
             item1 = self_objects[ckey]
             item2 = other_objects[ckey]
 
-            if isinstance(item1, NodeList) and not isinstance(item2, NodeList):
+            if isinstance(item1, NodeList) and not isinstance(item2,
+                                                              NodeList):
                 new_list = NodeList(item2.name)
                 new_list.objects.append(item2)
                 item2 = new_list
-            elif isinstance(item2, NodeList) and not isinstance(item1, NodeList):
+            elif isinstance(item2, NodeList) and not isinstance(item1,
+                                                                NodeList):
                 new_list = NodeList(item1.name)
                 new_list.objects.append(item1)
                 item1 = new_list
 
-            items_diff = item1.diff(item2, path=current_path, ids=ids, required=required)
+            items_diff = item1.diff(item2, path=current_path, ids=ids,
+                                    required=required)
             if not items_diff.is_empty() or (self.name in required and
                                              ckey in required[self.name]):
-                #print self.name
-                #print required
                 ret.common_objects[ckey] = items_diff
 
         ret._type = self._type
@@ -269,6 +273,8 @@ class Node(object):
 
 
 class NodeList(object):
+    """List of Nodes or LightNodes"""
+
     __slots__ = ["objects", "name", "_type", "str_cache", "_hash"]
 
     def __init__(self, name, str_cache=StrCache()):
@@ -301,13 +307,15 @@ class NodeList(object):
         self.objects.append(Node(name, str_cache=self.str_cache))
 
     def set_light(self, name, _type, source, index, _len, str_cache):
-            self.objects.append(LightNode(name, _type, source, index, _len,
-                                          str_cache=self.str_cache))
+        self.objects.append(LightNode(name, _type, source, index, _len,
+                                      str_cache=self.str_cache))
 
     def diff(self, other, path="", ids={}, required={}):
+        """Computes deep differences between two node lists. This operation
+        doesn't preserve content of self and other objects - unneeded objects
+        are deleted due memory save up"""
+
         current_path = "%s.%s" % (path, self.name)
-        #current_path = path
-        #print "List path", current_path
         ret = DiffNodeList(self.name)
         objects1 = set()
         objects2 = set()
@@ -353,7 +361,6 @@ class NodeList(object):
         missing_in_1 = objects2 - common_o
         missing_in_2 = objects1 - common_o
 
-
         for o in common_o:
             # if id is used, calculate diff, because two objects with same
             # id don't have to be same in general
@@ -384,6 +391,8 @@ class NodeList(object):
 
 
 class DiffNode(object):
+    """Structure holding results of two nodes diff"""
+
     __slots__ = ["name", "common_objects", "missing_in_1", "missing_in_2",
                  "value", "diff_value", "_type",
                  "diff_type", "differ"]
@@ -400,6 +409,9 @@ class DiffNode(object):
         self.differ = False
 
     def is_empty(self):
+        """Check if diff_node contain any changed - if
+        copared nodes were different"""
+
         if self.differ:
             return False
         for item in self.common_objects.itervalues():
@@ -411,6 +423,8 @@ class DiffNode(object):
 
 
 class DiffNodeList(object):
+    """Structure holding results of two node lists diff"""
+
     __slots__ = ["name", "common_objects", "missing_in_1", "missing_in_2",
                  "value", "diff_value", "_type",
                  "diff_type", "differ"]
@@ -423,6 +437,8 @@ class DiffNodeList(object):
         self.differ = False
 
     def is_empty(self):
+        """same as DiffNode.is_empty()"""
+
         if self.differ:
             return False
         for item in self.common_objects:
@@ -434,6 +450,11 @@ class DiffNodeList(object):
 
 
 class LightNode(Node):
+    """Light version of Node. Content is not loaded into memory, but
+    only offset in source file(or source str stream) and length of content
+    is stored. LightNode has extremely small memory footprint, but all
+    operations consume more time than i case of Node"""
+
     __slots__ = ["_type", "name", "source", "offset", "_len", "str_cache",
                  "_hash"]
 
@@ -461,7 +482,6 @@ class LightNode(Node):
     @property
     def value(self):
         p = parser.Parser()
-
         oldpos = self.source.tell()
         self.source.seek(self.offset)
         _str = self.source.read(self._len)

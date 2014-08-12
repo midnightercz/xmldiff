@@ -28,25 +28,19 @@ class UnknownXMLStructureError(Exception):
 
 
 class XMLProperty(object):
-    __slots__ = ("source", "offset", "_len", "_hash", "stream")
+    __slots__ = ("source", "offset", "_len", "_hash")
 
     def __init__(self, source, offset, _len):
         self.source = source
         self.offset = offset
         self._len = _len
         self._hash = None
-        self.stream = None
-
-    def _stream_load(self):
-        old_pos = self.source.tell()
-        self.source.seek(self.offset)
-        content = self.source.read(self._len)
-        self.stream = StringIO.StringIO(content)
-        self.source.seek(old_pos)
 
     def load(self):
+        oldpos = self.source.tell()
         self.source.seek(self.offset)
         ret = self.source.read(self._len).strip()
+        self.source.seek(oldpos)
         ret = ret.decode("utf-8")
         return ret
 
@@ -95,14 +89,19 @@ class Parser(object):
         self.cdata = False
         self.tree = path2tree.Node("root")
         self.light_ended = False
+        self.nodes_limit = 160000
+        self.depth_limit = 3
+        self.nodes_counter = 0
 
     def start_el_handler(self, name, attrs):
         if self.light_ended:
             self.start_el_light_ended(name, attrs)
-        if len(self.el_stack) > 3:
+        if len(self.el_stack) > self.depth_limit or\
+           self.nodes_counter > self.nodes_limit:
             self.start_el_light(name, attrs)
         else:
             self.start_el_normal(name, attrs)
+            self.nodes_counter += 1
 
     def start_el_normal(self, name, attrs):
         self.path = ".".join([el["name"] for el in self.el_stack] + [name])

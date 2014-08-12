@@ -98,6 +98,7 @@ class Node(object):
             return self.objects[part].value
         else:
             return self.objects[part]
+    _get_last_light = _get_last
 
     def set(self, path, value=None, _type=None):
         """ method for set object to path. Method doesn't work recursively -
@@ -175,7 +176,7 @@ class Node(object):
             part = self.str_cache.get(part)
             if isinstance(current_object, LightNode):
                 break
-            current_object = current_object._get_last(part, final=False)
+            current_object = current_object._get_last_light(part, final=False)
         if isinstance(current_object, LightNode):
             return current_object
 
@@ -205,7 +206,7 @@ class Node(object):
                     LightNode(last_part, _type, source, index, _len))
                 return current_object.objects[last_part]._get_last_index("")
 
-    def diff(self, other, path="", ids={}):
+    def diff(self, other, path="", ids={}, required={}):
         """Computes deep differences between two nodes"""
 
         current_path = "%s.%s" % (path, self.name)
@@ -235,8 +236,12 @@ class Node(object):
                 new_list.objects.append(item1)
                 item1 = new_list
 
-            items_diff = item1.diff(item2, path=current_path, ids=ids)
-            ret.common_objects[ckey] = items_diff
+            items_diff = item1.diff(item2, path=current_path, ids=ids, required=required)
+            if not items_diff.is_empty() or (self.name in required and
+                                             ckey in required[self.name]):
+                #print self.name
+                #print required
+                ret.common_objects[ckey] = items_diff
 
         ret._type = self._type
         ret.value = self.value
@@ -246,6 +251,13 @@ class Node(object):
                 ret.diff_value = other.value
                 ret.diff_type = other._type
                 ret.differ = True
+            else:
+                if not isinstance(self, LightNode):
+                    del self.value
+                    del self.objects
+                if not isinstance(other, LightNode):
+                    del other.value
+                    del other.objects
 
         for mkey2 in missing_in_1:
             ret.missing_in_1[mkey2] = other_objects[mkey2]
@@ -274,6 +286,11 @@ class NodeList(object):
     def _get_last(self, part, final=False):
         return self.objects[-1].objects[part]
 
+    def _get_last_light(self, part, final=False):
+        if isinstance(self.objects[-1], LightNode):
+            return self.objects[-1]
+        return self.objects[-1].objects[part]
+
     def _get_last_index(self, part, final=False):
         return self.objects[-1]
 
@@ -287,7 +304,7 @@ class NodeList(object):
             self.objects.append(LightNode(name, _type, source, index, _len,
                                           str_cache=self.str_cache))
 
-    def diff(self, other, path="", ids={}):
+    def diff(self, other, path="", ids={}, required={}):
         current_path = "%s.%s" % (path, self.name)
         #current_path = path
         #print "List path", current_path
@@ -309,7 +326,6 @@ class NodeList(object):
                     # id compute
                     _id_parts = []
                     for id_part in ids[current_path]:
-                        #print id_part
                         if id_part in o.objects:
                             val = o.get(id_part)
                             if isinstance(val, unicode):
@@ -319,6 +335,8 @@ class NodeList(object):
                                     _id_parts.append(val.value.load())
                                 else:
                                     _id_parts.append(val.value)
+                            elif isinstance(val, Node):
+                                _id_parts.append(str(hash(val)))
                             else:
                                 _id_parts.append(val.load())
                         else:
@@ -343,7 +361,7 @@ class NodeList(object):
                 common_current_path = ".".join(current_path.split(".")[:-1])
                 diff_obj = o1_by_id[o].diff(o2_by_id[o],
                                             path=common_current_path,
-                                            ids=ids)
+                                            ids=ids, required=required)
                 if not diff_obj.is_empty():
                     ret.common_objects.append(diff_obj)
 
@@ -432,6 +450,7 @@ class LightNode(Node):
     @property
     def objects(self):
         p = parser.Parser()
+        p.depth_limit = 1
         oldpos = self.source.tell()
         self.source.seek(self.offset)
         _str = self.source.read(self._len)

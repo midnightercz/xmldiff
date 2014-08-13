@@ -4,6 +4,7 @@ import sys
 import parser
 import saxxml
 import xmlwriter
+import gzip
 
 # In this example we make diff between fedora 19 and fedora 20 comps file
 
@@ -14,10 +15,16 @@ f.write(response.read())
 f.close()
 
 # Same for f19 comps file
-f = open("f19-comps.xml", "w")
+f = open("f19-comps.xml.gz", "w")
 response = urllib2.urlopen("http://dl.fedoraproject.org/pub/fedora/linux/releases/19/Fedora/x86_64/os/repodata/58d3d79e79810d9494d706bc4e1e6cfec685cb5c0b287cfe71804303ece26ee2-Fedora-19-comps.xml.gz")
 f.write(response.read())
 f.close()
+
+f = gzip.open("f19-comps.xml.gz")
+funziped = open("f19-comps.xml", "w")
+funziped.write(f.read())
+f.close()
+funziped.close()
 
 # Make parsers and load data
 p = parser.Parser()
@@ -37,10 +44,12 @@ parsed2 = p.parse_file(open("f19-comps.xml"))
 # "path.to.element": ["list", "of", "subelements", "forming", "together",
 #                     "unique", "id"]
 
-IDS = {".root.comps.group.group": ["id"],
-       ".root.comps.group": ["id"],
+IDS = {".root.comps.group": ["id"],
+       ".root.comps.group.name": ["xml:lang"],
+       ".root.comps.group.description": ["xml:lang"],
        ".root.comps.category": ["id"],
-       ".root.comps.category.category": ["id"],
+       ".root.comps.category.name": ["xml:lang"],
+       ".root.comps.category.description": ["xml:lang"],
        ".root.comps.environment": ["id"],
        ".root.comps.environment.environment": ["id"]}
 

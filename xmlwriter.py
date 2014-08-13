@@ -68,7 +68,7 @@ class XMLWriter(object):
         self.stream.write(escape(content).encode("utf-8"))
 
     def comment(self, comment):
-        if self.no_cdata and self.last_action == "start":
+        if not self.no_cdata or self.last_action == "start":
             self.stream.write("\n")
         self.stream.write(self.indent_sep * (self.indent_lvl+1))
         self.stream.write("<!-- %s -->\n" % comment)

@@ -48,7 +48,8 @@ class XMLWriter(object):
 
         self.no_cdata = True
         self.stream.write(self.indent_sep * self.indent_lvl)
-        self.stream.write(self._start_elem_str(name, attrs, no_content))
+        self.stream.write(self._start_elem_str(name, attrs,
+                                               no_content).encode("utf-8"))
         if no_content:
             self.indent_lvl -= 1
 

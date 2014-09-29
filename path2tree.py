@@ -334,7 +334,7 @@ class NodeList(object):
                     # id compute
                     _id_parts = []
                     for id_part in ids[current_path]:
-                        if id_part in o.objects:
+                        try:
                             val = o.get(id_part)
                             if isinstance(val, unicode):
                                 _id_parts.append(val)
@@ -347,7 +347,7 @@ class NodeList(object):
                                 _id_parts.append(str(hash(val)))
                             else:
                                 _id_parts.append(val.load())
-                        else:
+                        except PathNotFound:
                             _id_parts.append("")
                     _id = "".join([x for x in _id_parts if x])
                     id_map[_id] = o

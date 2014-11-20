@@ -38,9 +38,9 @@ def tree2xml(xmlgenerator, root_node):
 
 
 def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
-    stack = [(root_node, "start_diff")]
+    stack = [(root_node, "start_diff", ".root")]
     while stack:
-        node, action = stack.pop(0)
+        node, action, current_path = stack.pop(0)
         if action == "start_diff":
             if isinstance(node, DiffNodeList):
                 i = 0
@@ -50,22 +50,22 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                         empty_common = False
                         break
                 if not empty_common:
-                    stack.insert(i, ("COMMON", "start_xml"))
+                    stack.insert(i, ("COMMON", "start_xml", current_path))
                     i += 1
                     for obj in node.common_objects:
-                        stack.insert(i, (obj, "start_diff"))
+                        stack.insert(i, (obj, "start_diff", current_path))
                         i += 1
                 if node.missing_in_1:
-                    stack.insert(i, ("MISSING IN 1", "start_xml"))
+                    stack.insert(i, ("MISSING IN 1", "start_xml", current_path))
                     i += 1
                     for obj in node.missing_in_1:
-                        stack.insert(i, (obj, "start_xml"))
+                        stack.insert(i, (obj, "start_xml", current_path))
                         i += 1
                 if node.missing_in_2:
-                    stack.insert(i, ("MISSING IN 2", "start_xml"))
+                    stack.insert(i, ("MISSING IN 2", "start_xml", current_path))
                     i += 1
                     for obj in node.missing_in_2:
-                        stack.insert(i, (obj, "start_xml"))
+                        stack.insert(i, (obj, "start_xml", current_path))
                         i += 1
 
             elif isinstance(node, DiffNode):
@@ -83,16 +83,20 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                             if subnode.differ:
                                 attrs[_name] = subnode.value
                                 attrs[_dname] = subnode.diff_value
-                            if (node.name in required_attrs and
-                               subnode.name in required_attrs[node.name]):
+                            if (current_path in required_attrs and
+                               subnode.name in required_attrs[current_path]):
                                 attrs[_name] = subnode.value
                                 attrs[_dname] = subnode.diff_value
                         else:
-                            if (node.name in required_attrs and
-                               subnode.name in required_attrs[node.name]):
-                                stack.insert(i, (subnode, "start_xml"))
+                            if (current_path in required_attrs and
+                               subnode.name in required_attrs[current_path]):
+                                stack.insert(i, (subnode, "start_xml",
+                                                 "%s.%s" % (current_path,
+                                                            subnode.name)))
                             else:
-                                stack.insert(i, (subnode, "start_diff"))
+                                stack.insert(i, (subnode, "start_diff",
+                                                 "%s.%s" % (current_path,
+                                                            subnode.name)))
                             i += 1
                             no_content = False
 
@@ -102,8 +106,8 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                            subnode._type == "attr"):
                             attrs[_name] = subnode.value
                         else:
-                            stack.insert(i, (subnode, "start_xml"))
-                            stack.insert(i, ("MISSING IN 1", "start_xml"))
+                            stack.insert(i, (subnode, "start_xml", current_path))
+                            stack.insert(i, ("MISSING IN 1", "start_xml", current_path))
                             i += 2
                             no_content = False
 
@@ -113,8 +117,8 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                            subnode._type == "attr"):
                             attrs[_name] = subnode.value
                         else:
-                            stack.insert(i, (subnode, "start_xml"))
-                            stack.insert(i, ("MISSING IN 2", "start_xml"))
+                            stack.insert(i, (subnode, "start_xml", current_path))
+                            stack.insert(i, ("MISSING IN 2", "start_xml", current_path))
                             i += 2
                             no_content = False
 
@@ -127,7 +131,7 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                         if node.diff_value:
                             xmlgenerator.comment("MISSING IN 2")
                             xmlgenerator.cdata(node.diff_value.load())
-                    stack.insert(i, (node, "end_diff"))
+                    stack.insert(i, (node, "end_diff", current_path))
         elif action == "start_xml":
             if not isinstance(node, str):
                 tree2xml(xmlgenerator, node)

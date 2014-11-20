@@ -1,0 +1,11 @@
+conf = {"IDS": {".root.updates.update": ["id"],
+                ".root.updates.update.pkglist.collection": ["short"],
+                ".root.updates.update.pkglist.collection.package": ["name",
+                                                                    "version",
+                                                                    "release",
+                                                                    "arch"],
+                ".root.updates.update.references.reference": ["href", "title"]},
+        "REQUIRED_ATTRS": {".root.updates.update": ["id"],
+                           ".root.updates.update.reference": ["title", "href"],
+                           ".root.updates.uddate.pkglist.collection": ["short"],
+                           ".root.updates.update.pkglist.collection.package": ["name", "version"]}}

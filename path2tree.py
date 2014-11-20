@@ -243,8 +243,8 @@ class Node(object):
 
             items_diff = item1.diff(item2, path=current_path, ids=ids,
                                     required=required)
-            if not items_diff.is_empty() or (self.name in required and
-                                             ckey in required[self.name]):
+            if not items_diff.is_empty() or (current_path in required and
+                                             ckey in required[current_path]):
                 ret.common_objects[ckey] = items_diff
 
         ret._type = self._type

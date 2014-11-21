@@ -1,3 +1,4 @@
+from path2tree import Node
 from path2tree import NodeList
 from path2tree import DiffNode
 from path2tree import DiffNodeList
@@ -80,13 +81,17 @@ def diff_tree2xml(xmlgenerator, root_node, required_attrs={}):
                         _dname = "__diff__%s" % subnode.name
                         if (not isinstance(subnode, DiffNodeList) and
                            subnode._type == "attr"):
-                            if subnode.differ:
+                            if isinstance(subnode, DiffNode) and\
+                               subnode.differ:
                                 attrs[_name] = subnode.value
                                 attrs[_dname] = subnode.diff_value
                             if (current_path in required_attrs and
                                subnode.name in required_attrs[current_path]):
-                                attrs[_name] = subnode.value
-                                attrs[_dname] = subnode.diff_value
+                                if isinstance(subnode, DiffNode):
+                                    attrs[_name] = subnode.value
+                                    attrs[_dname] = subnode.diff_value
+                                elif isinstance(subnode, Node):
+                                    attrs[subnode.name] = subnode.value
                         else:
                             if (current_path in required_attrs and
                                subnode.name in required_attrs[current_path]):

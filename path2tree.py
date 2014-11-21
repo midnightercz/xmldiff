@@ -101,6 +101,7 @@ class Node(object):
             return self.objects[part]
     _get_last_light = _get_last
 
+
     def set(self, path, value=None, _type=None):
         """ method for set object to path. Method doesn't work recursively -
         all parts of path have to be inserted before
@@ -149,7 +150,7 @@ class Node(object):
             return current_object.objects[last_part]
         else:
             if isinstance(current_object.objects[last_part], NodeList):
-                current_object.objects[last_part].set(last_part)
+                current_object.objects[last_part].set(last_part, _type=_type)
                 return current_object.objects[last_part]._get_last_index("")
             else:
                 if value is None:
@@ -158,7 +159,7 @@ class Node(object):
                         last_part,
                         str_cache=self.str_cache)
                     current_object.objects[last_part].objects.append(old)
-                    current_object.objects[last_part].set(last_part)
+                    current_object.objects[last_part].set(last_part, _type=_type)
                     return current_object.objects[last_part]._get_last_index("")
                 else:
                     current_object.objects[last_part].value = value
@@ -208,7 +209,7 @@ class Node(object):
                     LightNode(last_part, _type, source, index, _len))
                 return current_object.objects[last_part]._get_last_index("")
 
-    def diff(self, other, path="", ids={}, required={}):
+    def diff(self, other, path="", ids={}, required={}, clean_afterdiff=True):
         """Computes deep differences between two nodes. This operation
         doesn't preserve content of self and other objects - unneeded objects
         are deleted due memory save up"""
@@ -241,11 +242,24 @@ class Node(object):
                 new_list.objects.append(item1)
                 item1 = new_list
 
-            items_diff = item1.diff(item2, path=current_path, ids=ids,
-                                    required=required)
-            if not items_diff.is_empty() or (current_path in required and
-                                             ckey in required[current_path]):
+            if isinstance(item1, Node):
+                items_diff = item1.diff(item2, path=current_path, ids=ids,
+                                        required=required,
+                                        clean_afterdiff=False)
+            else:
+                items_diff = item1.diff(item2, path=current_path, ids=ids,
+                                        required=required)
+
+            if (current_path in required and ckey in required[current_path]):
+                if not items_diff.is_empty():
+                    ret.common_objects[ckey] = items_diff
+                else:
+                    ret.common_objects[ckey] = item2
+            elif not items_diff.is_empty():
                 ret.common_objects[ckey] = items_diff
+            else:
+                item1._cleanup()
+                item2._cleanup()
 
         ret._type = self._type
         ret.value = self.value
@@ -256,12 +270,9 @@ class Node(object):
                 ret.diff_type = other._type
                 ret.differ = True
             else:
-                if not isinstance(self, LightNode):
-                    del self.value
-                    del self.objects
-                if not isinstance(other, LightNode):
-                    del other.value
-                    del other.objects
+                if clean_afterdiff:
+                    self.cleanup()
+                    other.cleanup()
 
         for mkey2 in missing_in_1:
             ret.missing_in_1[mkey2] = other_objects[mkey2]
@@ -271,6 +282,10 @@ class Node(object):
             ret.differ = True
         return ret
 
+    def _cleanup(self):
+        if not isinstance(self, LightNode):
+            del self.value
+            del self.objects
 
 class NodeList(object):
     """List of Nodes or LightNodes"""
@@ -303,8 +318,8 @@ class NodeList(object):
     def _get(self, part, final):
         return self.objects[int(part)]
 
-    def set(self, name):
-        self.objects.append(Node(name, str_cache=self.str_cache))
+    def set(self, name, _type):
+        self.objects.append(Node(name, str_cache=self.str_cache, _type=_type))
 
     def set_light(self, name, _type, source, index, _len, str_cache):
         self.objects.append(LightNode(name, _type, source, index, _len,
@@ -389,6 +404,9 @@ class NodeList(object):
                     break
         return ret
 
+    def _cleanup(self):
+        del self.objects
+
 
 class DiffNode(object):
     """Structure holding results of two nodes diff"""
@@ -415,7 +433,8 @@ class DiffNode(object):
         if self.differ:
             return False
         for item in self.common_objects.itervalues():
-            if not item.is_empty():
+            if (isinstance(item, DiffNode) or
+               isinstance(item, DiffNodeList)) and not item.is_empty():
                 return False
         if self.missing_in_1 or self.missing_in_2:
             return False
@@ -488,3 +507,6 @@ class LightNode(Node):
         self.source.seek(oldpos)
         ret = p.parse_str(_str)
         return ret.objects[self.name].value
+
+    def _cleanup(self):
+        pass

@@ -5,7 +5,7 @@ import utils
 import parser
 import xmldiff
 
-COMPARABLE_TYPES = ["primary"]#, "other", "filelists", "group", "updateinfo"]
+COMPARABLE_TYPES = ["primary", "other", "filelists", "group", "updateinfo"]
 COMPARABLE_TYPES_ALIAS = {"group": "comps"}
 
 

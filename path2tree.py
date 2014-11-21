@@ -66,9 +66,9 @@ class Node(object):
             for part in splitted[:-1]:
                 current_object = current_object._get(part, final=False)
                 part_path.append(part)
+            return current_object._get(splitted[-1], final=True)
         except KeyError:
             raise PathNotFound(".".join(part_path))
-        return current_object._get(splitted[-1], final=True)
 
     def _get(self, part, final):
         if (final and hasattr(self.objects[part], "value")
